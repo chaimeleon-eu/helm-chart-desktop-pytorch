@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ include "desktop-pytorch.fullname" . }}"
+  annotations: 
+    {{- include "chaimeleon.annotations" . | nindent 4 }}  
+  labels:
+    {{- include "desktop-pytorch.labels" . | nindent 4 }}    
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "{{ include "desktop-pytorch.fullname" . }}"
+  template:
+    metadata:
+      labels:
+        app: "{{ include "desktop-pytorch.fullname" . }}"
+    spec:
+      volumes:
+        - name: datalake
+          {{- include "chaimeleon.datalake.volume" . | nindent 10 }}
+        - name: home
+          {{- include "chaimeleon.persistent_home.volume" . | nindent 10 }}
+        - name: shared-folder
+          {{- include "chaimeleon.persistent_shared_folder.volume" . | nindent 10 }}
+        
+        {{- if .Values.datasets_list }}
+        {{- range $datasetID := splitList "," .Values.datasets_list }}
+        - name: "{{ $datasetID -}}"
+          {{- include "chaimeleon.dataset.volume" (list $ $datasetID) | nindent 10 }}
+        {{- end }}
+        {{- end }}
+
+      securityContext:
+        runAsUser: {{ include "chaimeleon.user.uid" . }}
+        runAsGroup: {{ include "chaimeleon.group.gid" . }}
+        fsGroup: {{ include "chaimeleon.user.uid" . }}
+        supplementalGroups: [ {{ include "chaimeleon.ceph.gid" . }} ] 
+
+      priorityClassName: processing-applications
+      
+      containers:
+      - name: {{ .Chart.Name }}
+        imagePullPolicy: IfNotPresent
+        {{- if .Values.requests.gpu }}
+        image: "chaimeleon-eu.i3m.upv.es:10443/chaimeleon-library/ubuntu_python_pytorch_desktop_vnc_sshd:{{ .Chart.AppVersion }}cuda10"
+        {{- else }}
+        image: "chaimeleon-eu.i3m.upv.es:10443/chaimeleon-library/ubuntu_python_pytorch_desktop_vnc_sshd:{{ .Chart.AppVersion }}"
+        {{- end }}
+        resources:
+          requests:
+            memory: "{{ .Values.requests.memory }}"
+            cpu: "{{ .Values.requests.cpu }}"
+        {{- if .Values.requests.gpu }}
+            nvidia.com/gpu: 1
+          limits:
+            nvidia.com/gpu: 1
+        {{- end }}
+        
+        volumeMounts:
+          - mountPath: "{{- include "chaimeleon.datalake.mount_point" . -}}"
+            name: datalake
+          - mountPath: "{{- include "chaimeleon.persistent_home.mount_point" . -}}"
+            name: home
+          - mountPath: "{{- include "chaimeleon.persistent_shared_folder.mount_point" . -}}"
+            name: shared-folder
+            
+          {{- if .Values.datasets_list }}
+          {{- range $datasetID := splitList "," .Values.datasets_list }}
+          - mountPath: "{{- include "chaimeleon.datasets.mount_point" $ -}}/{{- $datasetID -}}"
+            name: "{{ $datasetID -}}"
+          {{- end }}
+          {{- end }}
+
+        ports:
+          - containerPort: 2222
+            name: sshd
+          - containerPort: 5900
+            name: vnc-gui
+        env:
+          # password for "chaimeleon" (OS and SSH) user
+          - name: PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: "{{ include "desktop-pytorch.fullname" . }}"
+                key: container-password
+
+          # password for VNC access (empty username)
+          - name: VNC_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: "{{ include "desktop-pytorch.fullname" . }}"
+                key: container-password
+                
+          - name: VNC_HOST
+            # this is the DNS name of the service
+            value: "{{ include "desktop-pytorch.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local"
+
+          # Parameters required for automatically create the connection in Guacamole for this container
+          - name: GUACAMOLE_URL
+            value: "{{ .Values.guacamoleConnectionCreation.guacamoleUrl }}"
+          - name: GUACD_HOST
+            value: "{{ .Values.guacamoleConnectionCreation.guacdHost }}"
+          - name: GUACAMOLE_USER
+            valueFrom:
+              secretKeyRef:
+                name: "guacamole-api-auth"
+                key: user
+          - name: GUACAMOLE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: "guacamole-api-auth"
+                key: password
+          - name: GUACAMOLE_CONNECTION_NAME
+            value: "{{- include "desktop-pytorch.connectionName" . -}}"
+
+          - name: SSH_ENABLE_PASSWORD_AUTH
+            value: "true"
+          - name: GATEWAY_PORTS
+            value: "true"
+          - name: TCP_FORWARDING
+            value: "true"
+

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+    name: "{{ include "desktop-pytorch.fullname" . }}"
+spec:
+    selector:
+        app: "{{ include "desktop-pytorch.fullname" . }}"
+    type: ClusterIP
+    ports:
+    - port: 2222
+      targetPort: sshd
+      name: sshd-service
+    - port: 5900
+      targetPort: vnc-gui
+      name: vnc-gui-service

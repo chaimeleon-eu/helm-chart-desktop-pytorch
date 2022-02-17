@@ -1,0 +1,20 @@
+# Default values for desktop-tensorflow.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+requests: 
+  gpu: false
+  cpu: "1"
+  memory: "2Gi"
+
+datasets_list: ""
+
+configmaps:
+  ceph: "ceph-info"
+  chaimeleon: "chaimeleon"
+
+guacamoleConnectionCreation:
+  guacamoleUrl: "https://chaimeleon-eu.i3m.upv.es/guacamole/"
+  guacdHost: "oidc-guacamole-guacd.oidc-guacamole.svc.cluster.local"
+
+
