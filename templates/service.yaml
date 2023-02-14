@@ -7,9 +7,9 @@ spec:
         app: "{{ include "desktop-pytorch.fullname" . }}"
     type: ClusterIP
     ports:
-    - port: 2222
+    - name: sshd-svc
+      port: 2222
       targetPort: sshd
-      name: sshd-service
-    - port: 5900
+    - name: vnc-gui-svc
+      port: 5900
       targetPort: vnc-gui
-      name: vnc-gui-service
